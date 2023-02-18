@@ -2,40 +2,45 @@ import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
-import { AttributeType, Table } from 'aws-cdk-lib/aws-dynamodb';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 
 
 export class RoughHomeworkStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
-
+    
+    // To DO: Setup .env file
+    const env = {
+      CDK_DEFAULT_REGION:"us-east-1",
+    }
     // Create users table
-    const dynamoUsersTable = new Table(this, 'users', {
-      partitionKey: {
-        name: 'userId',
-        type: AttributeType.STRING
-      },
-      tableName: 'users',
-      /**
-       *  The default removal policy is RETAIN, which means that cdk destroy will not attempt to delete
-       * the new table, and it will remain in your account until manually deleted. By setting the policy to
-       * DESTROY, cdk destroy will delete the table (even if it has data in it)
-       */
+    const dynamoUsersTable = new dynamodb.Table(this, 'UsersTable', {
+      partitionKey: { name: 'userId',type: dynamodb.AttributeType.STRING},
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      encryption: dynamodb.TableEncryption.DEFAULT,
+      pointInTimeRecovery: false,
       removalPolicy: cdk.RemovalPolicy.DESTROY, // NOT recommended for production code
+      // stream: dynamodb.StreamViewType.NEW_IMAGE,
     });
 
     // Create Lambda function a for each lamba script
     const helloLambda = new lambda.Function(this, 'HelloLambda', {
-      runtime: lambda.Runtime.NODEJS_12_X,
+      runtime: lambda.Runtime.NODEJS_16_X,
       code: lambda.Code.fromAsset('src/lambas/api'),
       handler: 'home.handler'
     });
 
 
     const createUserLambda = new lambda.Function(this, 'createUserLambda', {
-      runtime: lambda.Runtime.NODEJS_12_X,
       code: lambda.Code.fromAsset('src/lambas/api/user/create'),
-      handler: 'index.handler'
+      handler: 'index.handler',
+      runtime: lambda.Runtime.NODEJS_16_X,
+      memorySize: 256,
+      timeout: cdk.Duration.seconds(10),
+      environment: {
+        ORDER_TABLE_NAME: dynamoUsersTable.tableName,
+        CDK_DEFAULT_REGION: env.CDK_DEFAULT_REGION
+      },
     });
 
     console.log("createUserLambda",createUserLambda)

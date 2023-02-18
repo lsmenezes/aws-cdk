@@ -1,34 +1,38 @@
-import * as AWS from 'aws-sdk';
+import * as sdk from 'aws-sdk';
 
-import { v4 as uuidv4 } from 'uuid';
-
-export const handler = async (event: any = {}): Promise<any> => {
+export const handler = async (event: any = {}, context: any = {},): Promise<any> => {
   
-  console.log("In the handler")
-
-  const TABLE_NAME = 'users';
-  const PRIMARY_KEY = 'userId';
-  const dynamodb = new AWS.DynamoDB.DocumentClient();
-    
+  const TABLE_NAME = process.env.ORDER_TABLE_NAME!;
+  const documentClient = new sdk.DynamoDB.DocumentClient({ region: process.env.CDK_DEFAULT_REGION });
+   
   if (!event.body) {
     return { statusCode: 400, body: 'invalid request, you are missing the parameter body' };
   }
+  const { body } = event;
+  const { name, email, phone, birthday } = JSON.parse(body);
+  const userId = context.awsRequestId; 
+  
+  const user = {
+    userId,
+    name,
+    email,
+    phone,
+    birthday
+  }
 
-  const user = typeof event.body == 'object' ? event.body : JSON.parse(event.body);
-  user[PRIMARY_KEY] = uuidv4();
-  const params = {
+  const putParams = {
     TableName: TABLE_NAME,
-    Item: user
+    Item:  user
   };
 
-
   try {
-      console.log("params",params)
-      await dynamodb.put(params).promise();
+      console.log("putParams",putParams)
+      await documentClient.put(putParams).promise();
       return {
           statusCode: 200,
           body: JSON.stringify({
-              message: 'Data saved successfully.'
+              message: 'Data saved successfully.',
+              user:user
           })
       };
   } catch (error) {
@@ -36,6 +40,7 @@ export const handler = async (event: any = {}): Promise<any> => {
           statusCode: 500,
           body: JSON.stringify({
               message: 'Error saving data. '+error,
+              user:user
           })
       };
   }
