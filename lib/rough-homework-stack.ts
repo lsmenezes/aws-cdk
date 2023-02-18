@@ -3,6 +3,8 @@ import { Construct } from 'constructs';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import { DynamoEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
+import { Effect, PolicyStatement, Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 
 
 export class RoughHomeworkStack extends cdk.Stack {
@@ -12,7 +14,23 @@ export class RoughHomeworkStack extends cdk.Stack {
     // To DO: Setup .env file
     const env = {
       CDK_DEFAULT_REGION:"us-east-1",
+      SOURCE_EMAIL:"leonardomenezes.pro@gmail.com"
     }
+
+    //sending email permissions 
+     // The code that defines your stack goes here
+    const role = new Role(this, "snsLambdaRole", {
+      assumedBy: new ServicePrincipal("lambda.amazonaws.com"),
+    });
+    ///Attaching ses access to policy
+    const policy = new PolicyStatement({
+      effect: Effect.ALLOW,
+      actions: ["ses:SendEmail", "ses:SendRawEmail", "logs:*"],
+      resources: ["*"],
+    });
+    //granting IAM permissions to role
+    role.addToPolicy(policy);
+
     // Create users table
     const dynamoUsersTable = new dynamodb.Table(this, 'UsersTable', {
       partitionKey: { name: 'userId',type: dynamodb.AttributeType.STRING},
@@ -20,7 +38,7 @@ export class RoughHomeworkStack extends cdk.Stack {
       encryption: dynamodb.TableEncryption.DEFAULT,
       pointInTimeRecovery: false,
       removalPolicy: cdk.RemovalPolicy.DESTROY, // NOT recommended for production code
-      // stream: dynamodb.StreamViewType.NEW_IMAGE,
+      stream: dynamodb.StreamViewType.NEW_IMAGE,
     });
 
     // Create Lambda function a for each lamba script
@@ -30,10 +48,9 @@ export class RoughHomeworkStack extends cdk.Stack {
       handler: 'home.handler'
     });
 
-
     const createUserLambda = new lambda.Function(this, 'createUserLambda', {
-      code: lambda.Code.fromAsset('src/lambas/api/user/create'),
-      handler: 'index.handler',
+      code: lambda.Code.fromAsset('src/lambas/api/user'),
+      handler: 'create.handler',
       runtime: lambda.Runtime.NODEJS_16_X,
       memorySize: 256,
       timeout: cdk.Duration.seconds(10),
@@ -43,10 +60,30 @@ export class RoughHomeworkStack extends cdk.Stack {
       },
     });
 
-    console.log("createUserLambda",createUserLambda)
+    const welcomeUserLambda = new lambda.Function(this, 'welcomeUserLambda', {
+      code: lambda.Code.fromAsset('src/lambas/notifications'),
+      handler: 'welcomeUser.handler',
+      runtime: lambda.Runtime.NODEJS_16_X,
+      memorySize: 256,
+      timeout: cdk.Duration.seconds(10),
+      environment: {
+        ORDER_TABLE_NAME: dynamoUsersTable.tableName,
+        CDK_DEFAULT_REGION: env.CDK_DEFAULT_REGION,
+        SOURCE_EMAIL: env.SOURCE_EMAIL
+      },
+      role: role
+    });
+
     // Grant the Lambda function read access to the DynamoDB table
     dynamoUsersTable.grantReadWriteData(createUserLambda);
+    dynamoUsersTable.grantReadWriteData(welcomeUserLambda);
 
+    //add insert tiger on dynamoUsersTable
+    welcomeUserLambda.addEventSource(new DynamoEventSource(dynamoUsersTable, {
+      startingPosition: lambda.StartingPosition.LATEST,
+      batchSize: 1
+    }));    
+    
     // Integrate the Lambda functions with the API Gateway resource 
     const helloLambdaIntegration = new apigateway.LambdaIntegration(helloLambda);
     const createUserLambdaIntegration = new apigateway.LambdaIntegration(createUserLambda);
