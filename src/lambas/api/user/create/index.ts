@@ -8,6 +8,7 @@ export const handler = async (event: any = {}, context: any = {},): Promise<any>
   if (!event.body) {
     return { statusCode: 400, body: 'invalid request, you are missing the parameter body' };
   }
+  
   const { body } = event;
   const { name, email, phone, birthday } = JSON.parse(body);
   const userId = context.awsRequestId; 
@@ -26,7 +27,6 @@ export const handler = async (event: any = {}, context: any = {},): Promise<any>
   };
 
   try {
-      console.log("putParams",putParams)
       await documentClient.put(putParams).promise();
       return {
           statusCode: 200,
