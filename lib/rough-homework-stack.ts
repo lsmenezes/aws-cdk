@@ -68,15 +68,26 @@ export class RoughHomeworkStack extends cdk.Stack {
       timeout: cdk.Duration.seconds(10),
       environment: {
         ORDER_TABLE_NAME: dynamoUsersTable.tableName,
+        CDK_DEFAULT_REGION: env.CDK_DEFAULT_REGION
+      },
+      role: role
+    });
+
+    const happyBirthdayLambda = new lambda.Function(this, 'happyBirthdayLambda', {
+      runtime: lambda.Runtime.NODEJS_16_X,
+      code: lambda.Code.fromAsset('src/lambas/notifications'),
+      handler: 'happyBirthday.handler',
+      environment: {
+        ORDER_TABLE_NAME: dynamoUsersTable.tableName,
         CDK_DEFAULT_REGION: env.CDK_DEFAULT_REGION,
         SOURCE_EMAIL: env.SOURCE_EMAIL
       },
-      role: role
     });
 
     // Grant the Lambda function read access to the DynamoDB table
     dynamoUsersTable.grantReadWriteData(createUserLambda);
     dynamoUsersTable.grantReadWriteData(welcomeUserLambda);
+    dynamoUsersTable.grantReadWriteData(happyBirthdayLambda);
 
     //add insert tiger on dynamoUsersTable
     welcomeUserLambda.addEventSource(new DynamoEventSource(dynamoUsersTable, {
@@ -87,6 +98,7 @@ export class RoughHomeworkStack extends cdk.Stack {
     // Integrate the Lambda functions with the API Gateway resource 
     const helloLambdaIntegration = new apigateway.LambdaIntegration(helloLambda);
     const createUserLambdaIntegration = new apigateway.LambdaIntegration(createUserLambda);
+    const happyBirthdayIntegration = new apigateway.LambdaIntegration(happyBirthdayLambda);
 
     // Create an API Gateway resource and setup routes for each operation
     const api = new apigateway.RestApi(this, 'itemsApi', {
@@ -94,11 +106,17 @@ export class RoughHomeworkStack extends cdk.Stack {
     });
 
     api.root.addMethod('GET',helloLambdaIntegration);    
-    const userEndpoint = api.root.addResource('user_teste')
+    const userEndpoint = api.root.addResource('user')
     userEndpoint.addMethod('POST',createUserLambdaIntegration,{
       authorizationType: apigateway.AuthorizationType.NONE
     })
     addCorsOptions(userEndpoint)
+    const birthdayEndpoint = api.root.addResource('birthday')
+    birthdayEndpoint.addMethod('GET',happyBirthdayIntegration,{
+      authorizationType: apigateway.AuthorizationType.NONE
+    })
+    addCorsOptions(birthdayEndpoint)
+    
 
   }
 
