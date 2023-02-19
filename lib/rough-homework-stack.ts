@@ -82,6 +82,7 @@ export class RoughHomeworkStack extends cdk.Stack {
         CDK_DEFAULT_REGION: env.CDK_DEFAULT_REGION,
         SOURCE_EMAIL: env.SOURCE_EMAIL
       },
+      role: role
     });
 
     // Grant the Lambda function read access to the DynamoDB table
