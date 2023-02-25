@@ -5,6 +5,8 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import { DynamoEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import { Effect, PolicyStatement, Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
+import * as events from 'aws-cdk-lib/aws-events'
+import * as targets from 'aws-cdk-lib/aws-events-targets'
 
 
 export class RoughHomeworkStack extends cdk.Stack {
@@ -18,16 +20,17 @@ export class RoughHomeworkStack extends cdk.Stack {
     }
 
     //sending email permissions 
-     // The code that defines your stack goes here
-    const role = new Role(this, "snsLambdaRole", {
+      const role = new Role(this, "snsLambdaRole", {
       assumedBy: new ServicePrincipal("lambda.amazonaws.com"),
     });
+
     ///Attaching ses access to policy
     const policy = new PolicyStatement({
       effect: Effect.ALLOW,
       actions: ["ses:SendEmail", "ses:SendRawEmail", "logs:*"],
       resources: ["*"],
     });
+
     //granting IAM permissions to role
     role.addToPolicy(policy);
 
@@ -96,6 +99,15 @@ export class RoughHomeworkStack extends cdk.Stack {
       batchSize: 1
     }));    
     
+    // configure birthday message cron
+    const happyBirthdayEventRule = new events.Rule(this, 'happyBirthdayEventRule', {
+      //schedule: events.Schedule.cron({ minute: '*',}) //run every minute for debugging
+      schedule: events.Schedule.cron({ minute: '0', hour: '0' }) //run everyday at midnight
+    });
+    
+    //telling the cron what lamba it should call
+    happyBirthdayEventRule.addTarget(new targets.LambdaFunction(happyBirthdayLambda))
+
     // Integrate the Lambda functions with the API Gateway resource 
     const helloLambdaIntegration = new apigateway.LambdaIntegration(helloLambda);
     const createUserLambdaIntegration = new apigateway.LambdaIntegration(createUserLambda);
@@ -117,8 +129,6 @@ export class RoughHomeworkStack extends cdk.Stack {
       authorizationType: apigateway.AuthorizationType.NONE
     })
     addCorsOptions(birthdayEndpoint)
-    
-
   }
 
 }
